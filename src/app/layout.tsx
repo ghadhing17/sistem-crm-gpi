@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { SessionProvider } from "next-auth/react";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +26,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        {/*
+         * SessionProvider diperlukan agar hook useSession dan signIn/signOut
+         * dari next-auth/react berfungsi di Client Components.
+         * Server Components menggunakan auth() dari @/lib/auth/config langsung.
+         */}
+        <SessionProvider>{children}</SessionProvider>
+      </body>
     </html>
   );
 }

@@ -1,6 +1,7 @@
 // Prisma Schema — CRM Graha Padma
-// Jalankan `npx prisma generate` setelah update schema ini
-// Jalankan `npx prisma migrate dev` untuk apply ke database
+// Generated: 2026-08-15
+// Jalankan `npx prisma migrate dev --name <nama>` untuk apply perubahan ke database
+// Jalankan `npx prisma generate` untuk regenerate Prisma Client
 
 generator client {
   provider = "prisma-client-js"
@@ -11,9 +12,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ---------------------------------------------------------------------------
-// Auth & User Management
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// ENUM DEFINITIONS
+// Semua enum dikelompokkan di sini agar mudah di-review sekaligus
+// ===========================================================================
+
+// --- User & Auth ---
 
 enum UserRole {
   SALES_EXECUTIVE
@@ -23,43 +27,9 @@ enum UserRole {
   SUPER_ADMIN
 }
 
-model User {
-  id          String   @id @default(cuid())
-  nama        String
-  email       String   @unique
-  password    String   // Argon2id hash — tidak pernah plaintext
-  role        UserRole
-  timId       String?
-  statusAktif Boolean  @default(true)
-  mustChangePassword Boolean @default(true) // Wajib ganti password saat login pertama
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// --- Lead ---
 
-  tim         Team?    @relation(fields: [timId], references: [id])
-
-  leadsAsPic  Lead[]   @relation("SalesPic")
-  activities  Activity[]
-  bookings    Booking[] @relation("SalesBooking")
-  approvals   Booking[] @relation("ApprovalBooking")
-  auditLogs   AuditLog[]
-
-  @@map("users")
-}
-
-model Team {
-  id        String  @id @default(cuid())
-  namaTim   String
-  managerId String?
-
-  users     User[]
-
-  @@map("teams")
-}
-
-// ---------------------------------------------------------------------------
-// Lead Management
-// ---------------------------------------------------------------------------
-
+/// Status pipeline lead sesuai PRD 5.1 — urutan alur penjualan
 enum LeadStatus {
   BARU
   DIHUBUNGI
@@ -71,12 +41,14 @@ enum LeadStatus {
   LOST
 }
 
+/// Tag kualifikasi manual oleh sales (Hot/Warm/Cold) sesuai PRD 5.1
 enum LeadKualifikasi {
   HOT
   WARM
   COLD
 }
 
+/// Sumber asal lead sesuai PRD 5.1 — dipakai untuk analitik konversi per channel
 enum SumberLead {
   WHATSAPP
   TELEPON
@@ -89,130 +61,52 @@ enum SumberLead {
   LAINNYA
 }
 
-model Lead {
-  id               String          @id @default(cuid())
-  nama             String
-  noHp             String
-  email            String?
-  sumber           SumberLead
-  minatClusterId   String?
-  minatTipe        String?
-  statusPipeline   LeadStatus      @default(BARU)
-  tagKualifikasi   LeadKualifikasi?
-  salesPicId       String?
-  isDuplikatDari   String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+// --- Activity ---
 
-  salesPic         User?           @relation("SalesPic", fields: [salesPicId], references: [id])
-  minatCluster     Cluster?        @relation(fields: [minatClusterId], references: [id])
-  activities       Activity[]
-  bookings         Booking[]
-  documents        Document[]
-
-  @@map("leads")
+/// Jenis aktivitas follow-up sesuai PRD 5.3
+enum JenisActivity {
+  TELEPON
+  WHATSAPP
+  MEETING
+  SITE_VISIT
+  CATATAN
 }
 
-model Activity {
-  id         String   @id @default(cuid())
-  leadId     String
-  jenis      String   // Telepon | WA | Meeting | SiteVisit | Catatan
-  ringkasan  String
-  createdBy  String
-  createdAt  DateTime @default(now())
+// --- Unit ---
 
-  lead       Lead     @relation(fields: [leadId], references: [id])
-  user       User     @relation(fields: [createdBy], references: [id])
-
-  @@map("activities")
-}
-
-// ---------------------------------------------------------------------------
-// Unit & Inventory
-// ---------------------------------------------------------------------------
-
+/// Status ketersediaan unit sesuai PRD 5.4
+/// NEGOSIASI = "soft hold" sementara selama negosiasi berlangsung
 enum StatusUnit {
   TERSEDIA
-  NEGOSIASI
+  NEGOSIASI   // soft hold, auto-release setelah holdExpiredAt
   BOOKED
   TERJUAL
   TIDAK_DIJUAL
 }
 
-model Cluster {
-  id           String   @id @default(cuid())
-  namaCluster  String
-  lokasi       String
-  createdAt    DateTime @default(now())
+// --- Booking ---
 
-  units        Unit[]
-  leads        Lead[]
-
-  @@map("clusters")
-}
-
-model Unit {
-  id            String     @id @default(cuid())
-  clusterId     String
-  blok          String
-  noKavling     String
-  tipe          String
-  luasTanah     Float
-  luasBangunan  Float
-  harga         BigInt
-  status        StatusUnit @default(TERSEDIA)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-
-  cluster       Cluster    @relation(fields: [clusterId], references: [id])
-  bookings      Booking[]
-
-  @@unique([clusterId, blok, noKavling])
-  @@map("units")
-}
-
-// ---------------------------------------------------------------------------
-// Booking & Transaksi
-// ---------------------------------------------------------------------------
-
+/// Skema pembayaran sesuai PRD 5.5
 enum SkemaPembayaran {
   CASH
   KPR
   CASH_BERTAHAP
 }
 
+/// Status booking sesuai alur approval PRD 5.5 & 6.2
+/// DIBATALKAN: booking yang dibatalkan setelah disetujui (misal customer mundur)
 enum StatusBooking {
   DRAFT
   MENUNGGU_APPROVAL
   DISETUJUI
   DITOLAK
   SELESAI
+  DIBATALKAN
 }
 
-model Booking {
-  id               String          @id @default(cuid())
-  leadId           String
-  unitId           String
-  salesId          String
-  hargaDeal        BigInt
-  diskonPersen     Float           @default(0)
-  skemaPembayaran  SkemaPembayaran
-  status           StatusBooking   @default(DRAFT)
-  approvedBy       String?
-  approvedAt       DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+// --- BookingChecklist ---
 
-  lead             Lead            @relation(fields: [leadId], references: [id])
-  unit             Unit            @relation(fields: [unitId], references: [id])
-  sales            User            @relation("SalesBooking", fields: [salesId], references: [id])
-  approver         User?           @relation("ApprovalBooking", fields: [approvedBy], references: [id])
-  checklists       BookingChecklist[]
-  documents        Document[]
-
-  @@map("bookings")
-}
-
+/// Status tiap tahap checklist sesuai PRD 5.6
 enum StatusChecklist {
   BELUM_MULAI
   DIPROSES
@@ -220,75 +114,343 @@ enum StatusChecklist {
   BERMASALAH
 }
 
+// --- Notifikasi ---
+
+/// Jenis notifikasi sesuai PRD 5.9 — dipakai untuk ikon & routing di frontend
+enum JenisNotifikasi {
+  LEAD_BARU_MASUK          // untuk Manager: ada lead baru belum di-assign
+  LEAD_DIASSIGN            // untuk Sales: lead baru ditugaskan ke saya
+  REMINDER_FOLLOWUP        // pengingat follow-up yang di-set sales
+  LEAD_TIDAK_AKTIF         // lead >3 hari tanpa aktivitas (SLA)
+  BOOKING_MENUNGGU_APPROVAL // untuk Manager: booking perlu di-approve
+  BOOKING_DISETUJUI        // untuk Sales: booking saya disetujui
+  BOOKING_DITOLAK          // untuk Sales: booking saya ditolak
+  DOKUMEN_DIUPLOAD         // dokumen customer baru di-upload
+  CHECKLIST_UPDATE         // status tahap checklist berubah
+  APPROVAL_KADALUARSA      // Manager tidak respon >48 jam (eskalasi)
+}
+
+// ===========================================================================
+// USER & TEAM
+// ===========================================================================
+
+/// Akun karyawan internal — tidak ada self-registration (PRD 10.2)
+/// Password di-hash Argon2id, tidak pernah disimpan plaintext
+model User {
+  id                 String   @id @default(cuid())
+  nama               String
+  email              String   @unique
+  password           String   // Argon2id hash
+  role               UserRole
+  timId              String?
+  statusAktif        Boolean  @default(true)
+  /// Wajib ganti password saat login pertama (PRD 5.10 & 10.2)
+  mustChangePassword Boolean  @default(true)
+  /// Untuk deteksi akun tidak aktif >90 hari (PRD 10.2)
+  lastLoginAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relasi
+  tim                Team?              @relation("TeamMembers", fields: [timId], references: [id])
+  teamDipimpin       Team[]             @relation("TeamManager")
+
+  leadsAsPic         Lead[]             @relation("SalesPic")
+  activities         Activity[]         @relation("ActivityCreator")
+  bookingsAsSales    Booking[]          @relation("SalesBooking")
+  bookingsAsApprover Booking[]          @relation("ApprovalBooking")
+  documents          Document[]         @relation("DocumentUploader")
+  notifications      Notification[]
+  auditLogs          AuditLog[]
+
+  @@index([role, statusAktif])
+  @@map("users")
+}
+
+/// Tim/divisi sales — satu tim punya satu manager (PRD 5.10 Master Data)
+/// manager_id → User dengan role SALES_MANAGER atau SUPER_ADMIN
+model Team {
+  id        String  @id @default(cuid())
+  namaTim   String
+  /// FK ke User — manager bertanggung jawab atas tim ini
+  managerId String?
+
+  // Relasi
+  manager   User?   @relation("TeamManager", fields: [managerId], references: [id])
+  members   User[]  @relation("TeamMembers")
+
+  @@map("teams")
+}
+
+// ===========================================================================
+// LEAD MANAGEMENT
+// ===========================================================================
+
+/// Entitas utama — satu lead = satu prospek customer (PRD 5.1)
+/// noHp dipakai untuk deteksi duplikat (PRD 5.1 & 6.1)
+model Lead {
+  id               String           @id @default(cuid())
+  nama             String
+  /// Dipakai deteksi duplikat — wajib ada saat input manual maupun auto-capture
+  noHp             String
+  email            String?
+  sumber           SumberLead
+  minatClusterId   String?
+  minatTipe        String?           // tipe rumah yang diminati, free text
+  statusPipeline   LeadStatus       @default(BARU)
+  tagKualifikasi   LeadKualifikasi?
+  salesPicId       String?
+  /// Jika lead ini duplikat, simpan ID lead asli di sini (PRD 6.1)
+  isDuplikatDari   String?
+  /// Wajib diisi saat status berubah ke LOST (PRD 5.1 & 6.1)
+  alasanLost       String?
+  /// Catatan harga penawaran & negosiasi dari sales (PRD 6.2)
+  catatanNegosiasi String?
+  /// Unit yang sedang di-hold sementara oleh lead ini (PRD 5.4 & 6.2)
+  holdUnitId       String?
+  /// Waktu habis hold — setelah ini unit kembali ke TERSEDIA (PRD 5.4)
+  holdExpiredAt    DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  // Relasi
+  salesPic         User?            @relation("SalesPic", fields: [salesPicId], references: [id])
+  minatCluster     Cluster?         @relation("LeadMinatCluster", fields: [minatClusterId], references: [id])
+  /// Self-referential: lead duplikat menunjuk ke lead asli
+  duplikatDari     Lead?            @relation("DuplikatLead", fields: [isDuplikatDari], references: [id])
+  duplikatLead     Lead[]           @relation("DuplikatLead")
+  holdUnit         Unit?            @relation("LeadHoldUnit", fields: [holdUnitId], references: [id])
+
+  activities       Activity[]
+  bookings         Booking[]
+  documents        Document[]
+
+  @@index([noHp])                   // deteksi duplikat cepat
+  @@index([salesPicId, statusPipeline]) // query pipeline per sales
+  @@index([statusPipeline])         // query kanban per kolom
+  @@index([createdAt])              // laporan per periode
+  @@map("leads")
+}
+
+/// Log aktivitas follow-up — membentuk timeline di Detail Lead (PRD 5.3)
+model Activity {
+  id          String        @id @default(cuid())
+  leadId      String
+  jenis       JenisActivity
+  ringkasan   String
+  createdBy   String
+  /// Pengingat follow-up yang di-set sales (PRD 5.3)
+  reminderAt  DateTime?
+  createdAt   DateTime      @default(now())
+
+  // Relasi
+  lead        Lead          @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user        User          @relation("ActivityCreator", fields: [createdBy], references: [id])
+
+  @@index([leadId, createdAt])      // timeline per lead
+  @@index([createdBy])
+  @@index([reminderAt])             // query reminder yang jatuh tempo
+  @@map("activities")
+}
+
+// ===========================================================================
+// UNIT & INVENTORY
+// ===========================================================================
+
+/// Cluster perumahan — level teratas hierarki Unit (PRD 5.4)
+model Cluster {
+  id          String   @id @default(cuid())
+  namaCluster String
+  lokasi      String
+  deskripsi   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relasi
+  units       Unit[]
+  leads       Lead[]   @relation("LeadMinatCluster")
+
+  @@map("clusters")
+}
+
+/// Unit kavling/rumah — level terbawah, yang di-booking customer (PRD 5.4)
+/// Constraint unique [clusterId, blok, noKavling] mencegah double entry unit
+model Unit {
+  id           String     @id @default(cuid())
+  clusterId    String
+  blok         String
+  noKavling    String
+  tipe         String     // tipe rumah: 36/72, 45/90, dsb
+  luasTanah    Float      // m²
+  luasBangunan Float      // m²
+  harga        BigInt     // dalam Rupiah — BigInt karena miliaran
+  status       StatusUnit @default(TERSEDIA)
+  /// Deskripsi/catatan tambahan unit (foto, denah disimpan sebagai dokumen)
+  deskripsi    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relasi
+  cluster      Cluster    @relation(fields: [clusterId], references: [id])
+  bookings     Booking[]
+  holdOlehLead Lead[]     @relation("LeadHoldUnit")
+
+  @@unique([clusterId, blok, noKavling])  // tidak boleh ada unit dobel dalam 1 cluster+blok
+  @@index([clusterId, status])            // query peta blok per cluster + filter status
+  @@index([status])                       // laporan inventory
+  @@map("units")
+}
+
+// ===========================================================================
+// BOOKING & TRANSAKSI
+// ===========================================================================
+
+/// Transaksi booking unit — dibuat sales, melalui approval, diproses Admin (PRD 5.5)
+/// Satu lead bisa punya lebih dari 1 booking (misal booking ulang setelah ditolak)
+/// Satu unit hanya boleh punya 1 booking aktif (bukan DITOLAK/DIBATALKAN)
+model Booking {
+  id                  String          @id @default(cuid())
+  leadId              String
+  unitId              String
+  salesId             String
+  hargaNormal         BigInt          // harga unit sebelum diskon — untuk kalkulasi diskon
+  hargaDeal           BigInt          // harga final setelah diskon
+  diskonPersen        Float           @default(0)
+  /// Alasan diskon yang diberikan sales — perlu diisi jika diskon > threshold
+  alasanDiskon        String?
+  skemaPembayaran     SkemaPembayaran
+  bookingFee          BigInt?         // jumlah booking fee / DP awal (PRD 5.5)
+  targetPelunasanDp   DateTime?       // target tanggal pelunasan DP (PRD 5.5)
+  status              StatusBooking   @default(DRAFT)
+  approvedBy          String?
+  approvedAt          DateTime?
+  /// Wajib diisi Manager saat menolak booking (PRD 6.2)
+  alasanDitolak       String?
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  // Relasi
+  lead                Lead            @relation(fields: [leadId], references: [id])
+  unit                Unit            @relation(fields: [unitId], references: [id])
+  sales               User            @relation("SalesBooking", fields: [salesId], references: [id])
+  approver            User?           @relation("ApprovalBooking", fields: [approvedBy], references: [id])
+  checklists          BookingChecklist[]
+  documents           Document[]
+
+  @@index([leadId])
+  @@index([unitId, status])           // cek apakah unit sudah punya booking aktif
+  @@index([salesId, status])          // dashboard sales: booking saya
+  @@index([status])                   // antrian approval, laporan
+  @@index([createdAt])
+  @@map("bookings")
+}
+
+/// Checklist 6 tahap proses transaksi (KPR → Akad → Serah Terima) — PRD 5.6
+/// Dibuat otomatis saat booking DISETUJUI (bisa via trigger di aplikasi)
 model BookingChecklist {
-  id         String          @id @default(cuid())
-  bookingId  String
-  tahap      Int             // 1–6 sesuai alur PRD 5.6
-  namaTahap  String
-  status     StatusChecklist @default(BELUM_MULAI)
-  catatan    String?
-  updatedAt  DateTime        @updatedAt
+  id          String          @id @default(cuid())
+  bookingId   String
+  /// Nomor tahap 1–6 sesuai urutan PRD 5.6
+  tahap       Int
+  namaTahap   String          // nama deskriptif tahap, disimpan agar tidak hardcode di frontend
+  status      StatusChecklist @default(BELUM_MULAI)
+  catatan     String?
+  /// Tanggal target penyelesaian tahap — untuk deteksi "macet" (PRD 5.6 & 6.3)
+  targetDate  DateTime?
+  /// Tanggal tahap benar-benar selesai
+  selesaiAt   DateTime?
+  updatedAt   DateTime        @updatedAt
 
-  booking    Booking         @relation(fields: [bookingId], references: [id])
+  // Relasi
+  booking     Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
-  @@unique([bookingId, tahap])
+  @@unique([bookingId, tahap])        // tiap booking hanya 1 record per tahap
+  @@index([bookingId])
+  @@index([status, targetDate])       // query checklist yang macet/overdue
   @@map("booking_checklists")
 }
 
-// ---------------------------------------------------------------------------
-// Dokumen
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// DOKUMEN
+// ===========================================================================
 
+/// Repository dokumen per lead atau booking (PRD 5.7)
+/// fileUrl menyimpan path internal server — BUKAN URL publik
+/// Akses via signed URL sementara (HMAC) di level aplikasi (PRD 10.4 & 10.6)
 model Document {
-  id             String   @id @default(cuid())
-  bookingId      String?
-  leadId         String?
-  jenisDokumen   String
-  fileUrl        String   // Path internal, bukan URL publik
-  uploadedBy     String
-  uploadedAt     DateTime @default(now())
+  id            String   @id @default(cuid())
+  /// Dokumen bisa terkait ke booking (dokumen transaksi) atau lead (dokumen awal)
+  bookingId     String?
+  leadId        String?
+  jenisDokumen  String   // KTP | KK | NPWP | SlipGaji | SPR | Akad | Lainnya
+  fileUrl       String   // path internal VPS, bukan URL publik
+  /// Nama file asli dari user — untuk display di UI
+  namaFile      String?
+  ukuranBytes   Int?     // untuk validasi & display ukuran file
+  mimeType      String?  // untuk validasi MIME type asli (PRD 10.6)
+  uploadedBy    String
+  uploadedAt    DateTime @default(now())
 
-  booking        Booking? @relation(fields: [bookingId], references: [id])
-  lead           Lead?    @relation(fields: [leadId], references: [id])
+  // Relasi
+  booking       Booking? @relation(fields: [bookingId], references: [id])
+  lead          Lead?    @relation(fields: [leadId], references: [id])
+  uploader      User     @relation("DocumentUploader", fields: [uploadedBy], references: [id])
 
+  @@index([bookingId])
+  @@index([leadId])
+  @@index([uploadedBy])
   @@map("documents")
 }
 
-// ---------------------------------------------------------------------------
-// Notifikasi
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// NOTIFIKASI
+// ===========================================================================
 
+/// Notifikasi in-app per user — ditampilkan di bell icon header (PRD 5.9)
 model Notification {
-  id        String   @id @default(cuid())
+  id        String           @id @default(cuid())
   userId    String
-  jenis     String
+  jenis     JenisNotifikasi
   pesan     String
-  isRead    Boolean  @default(false)
+  isRead    Boolean          @default(false)
+  /// URL/route tujuan saat notifikasi diklik (misal /bookings/abc123)
   linkRef   String?
-  createdAt DateTime @default(now())
+  /// ID entitas terkait — untuk deep link & de-duplikasi notifikasi
+  refId     String?
+  createdAt DateTime         @default(now())
 
-  @@index([userId, isRead])
+  // Relasi
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])           // query badge count + daftar notifikasi belum dibaca
+  @@index([userId, createdAt])        // query riwayat notifikasi per user
   @@map("notifications")
 }
 
-// ---------------------------------------------------------------------------
-// Audit Log — append-only, tidak boleh ada DELETE pada tabel ini
-// ---------------------------------------------------------------------------
+// ===========================================================================
+// AUDIT LOG — APPEND-ONLY
+// Tidak boleh ada operasi DELETE pada tabel ini di level aplikasi
+// Role database untuk aplikasi tidak diberi hak DELETE pada tabel ini (PRD 10.7)
+// ===========================================================================
 
+/// Log immutable setiap perubahan data sensitif — siapa, kapan, apa (PRD 10.7)
 model AuditLog {
   id         String   @id @default(cuid())
   userId     String
-  aksi       String   // CREATE | UPDATE | DELETE
-  entitas    String   // nama tabel/model
+  aksi       String   // CREATE | UPDATE | DELETE | LOGIN | LOGOUT | EXPORT | VIEW_SENSITIVE
+  entitas    String   // nama model: Lead | Unit | Booking | User | Document | dll
   entitasId  String
-  before     Json?    // nilai sebelum perubahan
-  after      Json?    // nilai setelah perubahan
+  before     Json?    // snapshot nilai sebelum perubahan
+  after      Json?    // snapshot nilai setelah perubahan
   ipAddress  String?
+  userAgent  String?  // browser/device info untuk login history (PRD 10.2)
   createdAt  DateTime @default(now())
 
+  // Relasi — userId nullable agar log tetap valid meski user dihapus
   user       User     @relation(fields: [userId], references: [id])
 
-  @@index([entitas, entitasId])
-  @@index([userId])
+  @@index([entitas, entitasId])       // riwayat per entitas (timeline unit, dll)
+  @@index([userId, createdAt])        // audit trail per user
+  @@index([aksi, createdAt])          // filter per jenis aksi
   @@map("audit_logs")
 }
