@@ -183,7 +183,7 @@ function UnitDetailContent() {
       <div className="text-center py-16">
         <p className="text-sm text-gray-500">Unit tidak ditemukan</p>
         <Link href={`/units/${clusterId}`} className="mt-2 text-xs text-[#009182] hover:underline">
-          Kembali ke peta blok
+          Kembali ke daftar unit
         </Link>
       </div>
     );

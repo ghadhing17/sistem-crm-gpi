@@ -27,11 +27,15 @@ export const createBookingSchema = z.object({
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
 export const approveBookingSchema = z.object({
-  aksi:           z.enum(["setujui", "tolak"]),
+  aksi:           z.enum(["setujui", "tolak", "batalkan"]),
   alasanDitolak:  z.string().min(3, "Alasan penolakan minimal 3 karakter").max(500).trim().optional(),
+  alasanBatalkan: z.string().min(3, "Alasan pembatalan minimal 3 karakter").max(500).trim().optional(),
 }).refine(
   (d) => !(d.aksi === "tolak" && !d.alasanDitolak),
   { message: "Alasan wajib diisi jika menolak booking", path: ["alasanDitolak"] }
+).refine(
+  (d) => !(d.aksi === "batalkan" && !d.alasanBatalkan),
+  { message: "Alasan wajib diisi jika membatalkan booking", path: ["alasanBatalkan"] }
 );
 
 export type ApproveBookingInput = z.infer<typeof approveBookingSchema>;

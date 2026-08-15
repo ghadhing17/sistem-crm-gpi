@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * Halaman /units/[clusterId] — Peta Blok Unit
- * PRD 5.4: grid kavling berwarna status + CRUD unit (Admin BO)
+ * Halaman /units/[clusterId] — Daftar Unit
+ * PRD 5.4: tabel unit per cluster + CRUD unit (Admin)
  */
 
 import { useState, useEffect, useTransition, Suspense } from "react";

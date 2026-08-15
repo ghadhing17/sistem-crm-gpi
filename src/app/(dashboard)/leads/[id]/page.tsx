@@ -17,6 +17,7 @@ import { format } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 import ActivityTimeline, { type Activity } from "@/components/leads/detail/ActivityTimeline";
 import LogAktivitasModal from "@/components/leads/detail/LogAktivitasModal";
+import EditLeadModal from "@/components/leads/detail/EditLeadModal";
 import BuatBookingModal from "@/components/bookings/BuatBookingModal";
 import DocumentUploader from "@/components/documents/DocumentUploader";
 import { canEditLead, canUpdateLeadPipeline, canCreateBooking } from "@/lib/auth/permissions";
@@ -95,13 +96,17 @@ function LeadDetailContent() {
   const [loadingAct, setLoadingAct]     = useState(true);
   const [showModal, setShowModal]       = useState(false);
   const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showEditModal, setShowEditModal]       = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
+  const [deleting, setDeleting]         = useState(false);
   const [error, setError]               = useState<string | null>(null);
 
   // Hak akses
   const canEdit    = lead && role ? canEditLead({ id: userId, role }, { salesPicId: lead.salesPic?.id ?? null }) : false;
   const canStatus  = lead && role ? canUpdateLeadPipeline({ id: userId, role }, { salesPicId: lead.salesPic?.id ?? null }) : false;
   const canBooking = role ? canCreateBooking({ id: userId, role }) : false;
+  const canDelete  = role === "MANAGER" || role === "SUPER_ADMIN";
 
   // ---------------------------------------------------------------------------
   // Fetch lead detail
@@ -173,6 +178,23 @@ function LeadDetailContent() {
     setActivities((prev) => [activity, ...prev]);
     setLead((prev) => prev ? { ...prev, _count: { ...prev._count, activities: prev._count.activities + 1 } } : prev);
     setShowModal(false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hapus lead
+  // ---------------------------------------------------------------------------
+  async function handleDeleteLead() {
+    if (!lead) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      const res  = await fetch(`/api/leads/${lead.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? "Gagal menghapus lead"); setShowDeleteConfirm(false); return; }
+      router.push("/leads");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -276,6 +298,28 @@ function LeadDetailContent() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
                 Log Aktivitas
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+                Edit
+              </button>
+            )}
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+                Hapus
               </button>
             )}
           </div>
@@ -496,13 +540,76 @@ function LeadDetailContent() {
             setShowBookingModal(false);
             if (booking.butuhApproval) {
               setError(null);
-              // Tampilkan info bahwa booking dikirim ke manager
             }
-            // Refresh lead untuk update _count.bookings
             fetchLead();
           }}
           onTutup={() => setShowBookingModal(false)}
         />
+      )}
+
+      {/* Modal Edit Lead */}
+      {showEditModal && lead && (
+        <EditLeadModal
+          leadId={lead.id}
+          initial={{
+            nama:             lead.nama,
+            noHp:             lead.noHp,
+            email:            lead.email,
+            sumber:           lead.sumber,
+            minatClusterId:   lead.minatCluster?.id ?? null,
+            minatTipe:        lead.minatTipe,
+            tagKualifikasi:   lead.tagKualifikasi,
+            catatanNegosiasi: lead.catatanNegosiasi,
+          }}
+          onSimpan={(updated) => {
+            setLead((prev) => prev ? {
+              ...prev,
+              nama:             updated.nama,
+              noHp:             updated.noHp,
+              email:            updated.email,
+              sumber:           updated.sumber,
+              minatTipe:        updated.minatTipe,
+              tagKualifikasi:   updated.tagKualifikasi,
+              catatanNegosiasi: updated.catatanNegosiasi,
+            } : prev);
+            setShowEditModal(false);
+          }}
+          onTutup={() => setShowEditModal(false)}
+        />
+      )}
+
+      {/* Konfirmasi Hapus Lead */}
+      {showDeleteConfirm && lead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-sm font-semibold text-gray-900 mb-1">Hapus Lead</h2>
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Hapus lead <strong>{lead.nama}</strong> beserta semua aktivitas dan dokumen terkait? Tindakan ini tidak bisa dibatalkan.
+                </p>
+              </div>
+            </div>
+            {error && <p className="mb-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => { setShowDeleteConfirm(false); setError(null); }} disabled={deleting}
+                className="flex-1 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Batal
+              </button>
+              <button onClick={handleDeleteLead} disabled={deleting}
+                className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50 flex items-center justify-center gap-1.5">
+                {deleting ? (
+                  <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Menghapus...</>
+                ) : "Hapus Lead"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

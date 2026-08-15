@@ -29,6 +29,7 @@ interface DocumentItem {
   mimeType: string | null;
   uploadedAt: string;
   uploader: { id: string; nama: string };
+  uploadedBy?: string; // optional — beberapa response mungkin tidak menyertakan
 }
 
 const JENIS_DOKUMEN_OPTIONS = [
@@ -172,6 +173,11 @@ export default function DocumentUploader({
   const [deleting, startDelete]   = useTransition();
   const [error, setError]         = useState<string | null>(null);
   const [success, setSuccess]     = useState<string | null>(null);
+
+  // Edit jenis dokumen
+  const [editingDocId, setEditingDocId]     = useState<string | null>(null);
+  const [editingJenis, setEditingJenis]     = useState("");
+  const [editSaving, startEditSave]         = useTransition();
 
   // Form upload
   const fileInputRef  = useRef<HTMLInputElement>(null);
@@ -452,8 +458,20 @@ export default function DocumentUploader({
                   </p>
                 </div>
 
-                {/* Aksi */}
+                  {/* Aksi */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                  {/* Edit jenis */}
+                  {!readonly && (doc.uploadedBy === userId || role === "ADMIN" || role === "SUPER_ADMIN") && (
+                    <button
+                      onClick={() => { setEditingDocId(doc.id); setEditingJenis(doc.jenisDokumen); }}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                      aria-label="Ubah jenis dokumen"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                      </svg>
+                    </button>
+                  )}
                   {/* Preview */}
                   {(isPdf || isImage) && (
                     <button
@@ -506,6 +524,53 @@ export default function DocumentUploader({
           mimeType={preview.mimeType}
           onTutup={() => setPreview(null)}
         />
+      )}
+
+      {/* Modal Edit Jenis Dokumen */}
+      {editingDocId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true">
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl p-5">
+            <h2 className="text-sm font-semibold text-gray-900 mb-3">Ubah Jenis Dokumen</h2>
+            <select
+              value={editingJenis}
+              onChange={(e) => setEditingJenis(e.target.value)}
+              disabled={editSaving}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-[#009182] mb-4 disabled:opacity-50"
+            >
+              {JENIS_DOKUMEN_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button onClick={() => { setEditingDocId(null); setEditingJenis(""); }} disabled={editSaving}
+                className="flex-1 py-2 rounded-lg border border-gray-300 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Batal
+              </button>
+              <button
+                onClick={() => {
+                  startEditSave(async () => {
+                    const res = await fetch(`/api/documents/${editingDocId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ jenisDokumen: editingJenis }),
+                    });
+                    const json = await res.json();
+                    if (res.ok) {
+                      setDocuments((prev) => prev.map((d) =>
+                        d.id === editingDocId ? { ...d, jenisDokumen: json.data.document.jenisDokumen } : d
+                      ));
+                      setEditingDocId(null);
+                      setEditingJenis("");
+                    }
+                  });
+                }}
+                disabled={editSaving}
+                className="flex-1 py-2 rounded-lg bg-[#009182] hover:bg-[#007a6e] text-white text-xs font-medium disabled:opacity-50">
+                {editSaving ? "Menyimpan..." : "Simpan"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal Konfirmasi Hapus */}

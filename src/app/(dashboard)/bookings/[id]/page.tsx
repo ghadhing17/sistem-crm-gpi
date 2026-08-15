@@ -380,11 +380,20 @@ function BookingDetailContent() {
 
   const [booking, setBooking]   = useState<BookingDetail | null>(null);
   const [loading, setLoading]   = useState(true);
-  const [showTolakModal, setShowTolakModal] = useState(false);
-  const [alasanTolak, setAlasanTolak]       = useState("");
-  const [approvePending, startApprove]      = useTransition();
+  const [showTolakModal, setShowTolakModal]         = useState(false);
+  const [showBatalkanModal, setShowBatalkanModal]   = useState(false);
+  const [alasanTolak, setAlasanTolak]               = useState("");
+  const [alasanBatalkan, setAlasanBatalkan]         = useState("");
+  const [approvePending, startApprove]              = useTransition();
   const [error, setError]       = useState<string | null>(null);
   const [success, setSuccess]   = useState<string | null>(null);
+
+  // Siapa yang boleh batalkan: sales pemilik atau Manager/Super Admin
+  const userId     = session?.user?.id ?? "";
+  const canBatalkan = booking && role && (
+    role === "MANAGER" || role === "SUPER_ADMIN" ||
+    booking.sales?.id === userId
+  ) && !["SELESAI", "DITOLAK", "DIBATALKAN"].includes(booking.status);
 
   const fetchBooking = useCallback(async () => {
     setLoading(true);
@@ -412,6 +421,26 @@ function BookingDetailContent() {
       setBooking(json.data.booking);
       setSuccess("Booking disetujui. Unit telah berubah ke status Booked dan checklist 6 tahap telah dibuat.");
       setTimeout(() => setSuccess(null), 6000);
+    });
+  }
+
+  function handleBatalkan(e: React.FormEvent) {
+    e.preventDefault();
+    if (!alasanBatalkan.trim()) { setError("Alasan pembatalan wajib diisi"); return; }
+    setError(null);
+    startApprove(async () => {
+      const res  = await fetch(`/api/bookings/${bookingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aksi: "batalkan", alasanBatalkan }),
+      });
+      const json = await res.json();
+      if (!res.ok) { setError(json.error ?? "Gagal membatalkan booking"); return; }
+      setBooking(json.data.booking);
+      setShowBatalkanModal(false);
+      setAlasanBatalkan("");
+      setSuccess("Booking telah dibatalkan.");
+      setTimeout(() => setSuccess(null), 4000);
     });
   }
 
@@ -617,6 +646,29 @@ function BookingDetailContent() {
       {/* ---------------------------------------------------------------- */}
       {/* Info Unit                                                         */}
       {/* ---------------------------------------------------------------- */}
+      {/* Tombol Batalkan — Sales pemilik atau Manager, status bukan final */}
+      {canBatalkan && (
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 mb-4 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Batalkan Booking</p>
+            <p className="text-xs text-gray-500 mt-0.5">Booking akan berubah ke status Dibatalkan. Tindakan ini tidak bisa dibalik.</p>
+          </div>
+          <button
+            onClick={() => setShowBatalkanModal(true)}
+            disabled={approvePending}
+            className="flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg border border-red-300 text-red-600 hover:bg-red-50 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Batalkan Booking
+          </button>
+        </div>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Info Unit                                                         */}
+      {/* ---------------------------------------------------------------- */}
       {booking.unit && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5 mb-4">
           <div className="flex items-center justify-between mb-3">
@@ -706,6 +758,45 @@ function BookingDetailContent() {
       {["DISETUJUI", "SELESAI"].includes(booking.status) && (
         <div className="bg-white rounded-2xl border border-gray-100 p-5 mt-4">
           <DocumentUploader bookingId={bookingId} title="Dokumen Transaksi" />
+        </div>
+      )}
+
+      {/* ---------------------------------------------------------------- */}
+      {/* Modal Batalkan Booking                                             */}
+      {/* ---------------------------------------------------------------- */}
+      {showBatalkanModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" role="dialog" aria-modal="true">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900">Batalkan Booking</h2>
+              <button onClick={() => { setShowBatalkanModal(false); setAlasanBatalkan(""); setError(null); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100" aria-label="Tutup">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <form onSubmit={handleBatalkan} className="px-5 py-4">
+              <p className="text-xs text-gray-600 mb-3 leading-relaxed">
+                Booking <strong>{booking?.lead?.nama}</strong> akan dibatalkan. Unit akan kembali ke status Tersedia.
+              </p>
+              <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                Alasan Pembatalan <span className="text-red-500">*</span>
+              </label>
+              <textarea rows={3} value={alasanBatalkan} onChange={(e) => setAlasanBatalkan(e.target.value)}
+                placeholder="Jelaskan alasan pembatalan booking..."
+                className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-red-400 resize-none" />
+              {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+              <div className="flex gap-2 mt-4">
+                <button type="button" onClick={() => { setShowBatalkanModal(false); setAlasanBatalkan(""); setError(null); }} disabled={approvePending}
+                  className="flex-1 py-2.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  Kembali
+                </button>
+                <button type="submit" disabled={approvePending || !alasanBatalkan.trim()}
+                  className="flex-1 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-medium disabled:opacity-50">
+                  {approvePending ? "Membatalkan..." : "Batalkan Booking"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

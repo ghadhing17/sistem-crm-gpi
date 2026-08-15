@@ -91,7 +91,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await req.json();
-    const { aksi, alasanDitolak } = approveBookingSchema.parse(body);
+    const { aksi, alasanDitolak, alasanBatalkan } = approveBookingSchema.parse(body);
 
     const booking = await prisma.booking.findUnique({
       where: { id },
@@ -104,6 +104,34 @@ export async function PATCH(
     });
 
     if (!booking) return apiNotFound("Booking tidak ditemukan");
+
+    if (aksi === "batalkan") {
+      // Batalkan bisa dari berbagai status — cek dulu sebelum guard MENUNGGU_APPROVAL
+      const canCancel =
+        user.role === "MANAGER" ||
+        user.role === "SUPER_ADMIN" ||
+        booking.salesId === user.id;
+      if (!canCancel) {
+        return apiForbidden("Anda tidak punya izin membatalkan booking ini");
+      }
+      if (["SELESAI", "DITOLAK", "DIBATALKAN"].includes(booking.status)) {
+        return apiError(`Booking dengan status "${booking.status}" tidak bisa dibatalkan`, 409);
+      }
+
+      await prisma.$transaction([
+        prisma.booking.update({
+          where: { id },
+          data:  { status: "DIBATALKAN", alasanDitolak: alasanBatalkan ?? null },
+        }),
+        ...(booking.status === "DISETUJUI"
+          ? [prisma.unit.update({ where: { id: booking.unitId }, data: { status: "TERSEDIA" } })]
+          : []
+        ),
+      ]);
+
+      const updated3 = await prisma.booking.findUnique({ where: { id }, select: BOOKING_SELECT });
+      return apiSuccess({ booking: serializeBooking(updated3!) });
+    }
 
     if (booking.status !== "MENUNGGU_APPROVAL") {
       return apiError(`Booking tidak bisa di-approve/tolak karena statusnya "${booking.status}"`, 409);
