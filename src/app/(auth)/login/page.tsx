@@ -3,23 +3,25 @@
 /**
  * Halaman Login — CRM Graha Padma
  *
- * Form email + password dengan validasi client-side minimal.
- * Auth sesungguhnya diproses oleh Auth.js Credentials provider di server.
- * Tidak ada OAuth, tidak ada self-register — sistem internal only (PRD 10.2).
+ * useSearchParams() wajib dibungkus Suspense di Next.js App Router.
+ * Solusi: LoginForm sebagai komponen terpisah, LoginPage sebagai wrapper Suspense.
  */
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-// Pesan error yang ditampilkan per kode error dari Auth.js
 const ERROR_MESSAGES: Record<string, string> = {
   CredentialsSignin: "Email atau password salah. Silakan coba lagi.",
   SessionRequired: "Sesi habis. Silakan login kembali.",
   Default: "Terjadi kesalahan. Silakan coba lagi.",
 };
 
-export default function LoginPage() {
+// ---------------------------------------------------------------------------
+// Komponen form — dipisah agar useSearchParams bisa dibungkus Suspense
+// ---------------------------------------------------------------------------
+
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/dashboard";
@@ -36,7 +38,6 @@ export default function LoginPage() {
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validasi minimal — tidak expose info ke server jika input jelas kosong
     if (!email.trim() || !password) {
       setErrorMsg("Email dan password wajib diisi.");
       return;
@@ -46,7 +47,7 @@ export default function LoginPage() {
       const result = await signIn("credentials", {
         email: email.toLowerCase().trim(),
         password,
-        redirect: false, // tangani redirect manual agar bisa tampil error
+        redirect: false,
       });
 
       if (!result || result.error) {
@@ -55,20 +56,17 @@ export default function LoginPage() {
         return;
       }
 
-      // Login berhasil — redirect ke callbackUrl atau dashboard
       router.push(callbackUrl);
-      router.refresh(); // refresh session di layout
+      router.refresh();
     });
   }
 
   return (
     <div className="w-full max-w-md px-4">
-      {/* Card login */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
         {/* Logo & Heading */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-[#009182] mb-4">
-            {/* Ikon rumah sederhana sebagai logo placeholder */}
             <svg
               className="w-7 h-7 text-white"
               fill="none"
@@ -84,9 +82,7 @@ export default function LoginPage() {
               />
             </svg>
           </div>
-          <h1 className="text-xl font-semibold text-gray-900">
-            CRM Graha Padma
-          </h1>
+          <h1 className="text-xl font-semibold text-gray-900">CRM Graha Padma</h1>
           <p className="text-sm text-gray-500 mt-1">
             Masuk dengan akun yang diberikan oleh administrator
           </p>
@@ -195,16 +191,49 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* Footer note */}
         <p className="mt-6 text-center text-xs text-gray-400">
           Lupa password? Hubungi administrator sistem.
         </p>
       </div>
 
-      {/* Versi app */}
       <p className="mt-4 text-center text-xs text-gray-400">
         CRM Graha Padma &mdash; Internal Only
       </p>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Skeleton saat Suspense loading — mencegah layout shift
+// ---------------------------------------------------------------------------
+
+function LoginSkeleton() {
+  return (
+    <div className="w-full max-w-md px-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 animate-pulse">
+        <div className="flex flex-col items-center mb-8 gap-3">
+          <div className="w-14 h-14 rounded-xl bg-gray-100" />
+          <div className="w-32 h-4 rounded bg-gray-100" />
+          <div className="w-48 h-3 rounded bg-gray-100" />
+        </div>
+        <div className="space-y-4">
+          <div className="h-10 rounded-lg bg-gray-100" />
+          <div className="h-10 rounded-lg bg-gray-100" />
+          <div className="h-10 rounded-lg bg-gray-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page export — wajib dibungkus Suspense karena LoginForm pakai useSearchParams
+// ---------------------------------------------------------------------------
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginSkeleton />}>
+      <LoginForm />
+    </Suspense>
   );
 }
