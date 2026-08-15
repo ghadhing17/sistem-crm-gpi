@@ -1,0 +1,84 @@
+# =============================================================================
+# Docker Compose — CRM Graha Padma Local Development
+# Jalankan: docker compose up
+# App tersedia di: http://localhost:3000
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Service: Aplikasi Next.js
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: deps # Di development, mount source code langsung
+    image: crm-graha-padma-app
+    container_name: crm_app
+    # Override untuk development: jalankan dev server, bukan production build
+    command: sh -c "npx prisma generate && npm run dev"
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://crm_user:crm_password@db:5432/crm_graha_padma
+      NEXTAUTH_URL: http://localhost:3000
+      # Nilai placeholder — ganti di .env sebelum development
+      NEXTAUTH_SECRET: dev-secret-ganti-di-env-sebelum-production
+      ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+      UPLOAD_DIR: /app/uploads
+    volumes:
+      # Mount source code agar hot-reload bekerja
+      - .:/app
+      # Jangan mount node_modules dari host (biarkan dari container)
+      - /app/node_modules
+      # Persistent upload folder
+      - uploads_data:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - crm_network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Service: PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: crm_db
+    environment:
+      POSTGRES_DB: crm_graha_padma
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    ports:
+      # Expose ke localhost agar bisa diakses dengan tools seperti TablePlus/DBeaver
+      # Tutup port ini di production!
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crm_user -d crm_graha_padma"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - crm_network
+    restart: unless-stopped
+
+# =============================================================================
+# Volumes — data persisten tidak hilang saat container restart
+# =============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+# =============================================================================
+# Networks — database tidak terbuka ke internet, hanya diakses app
+# =============================================================================
+networks:
+  crm_network:
+    driver: bridge

@@ -1,0 +1,294 @@
+// Prisma Schema — CRM Graha Padma
+// Jalankan `npx prisma generate` setelah update schema ini
+// Jalankan `npx prisma migrate dev` untuk apply ke database
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Auth & User Management
+// ---------------------------------------------------------------------------
+
+enum UserRole {
+  SALES_EXECUTIVE
+  SALES_MANAGER
+  ADMIN_BACK_OFFICE
+  MANAGEMENT
+  SUPER_ADMIN
+}
+
+model User {
+  id          String   @id @default(cuid())
+  nama        String
+  email       String   @unique
+  password    String   // Argon2id hash — tidak pernah plaintext
+  role        UserRole
+  timId       String?
+  statusAktif Boolean  @default(true)
+  mustChangePassword Boolean @default(true) // Wajib ganti password saat login pertama
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tim         Team?    @relation(fields: [timId], references: [id])
+
+  leadsAsPic  Lead[]   @relation("SalesPic")
+  activities  Activity[]
+  bookings    Booking[] @relation("SalesBooking")
+  approvals   Booking[] @relation("ApprovalBooking")
+  auditLogs   AuditLog[]
+
+  @@map("users")
+}
+
+model Team {
+  id        String  @id @default(cuid())
+  namaTim   String
+  managerId String?
+
+  users     User[]
+
+  @@map("teams")
+}
+
+// ---------------------------------------------------------------------------
+// Lead Management
+// ---------------------------------------------------------------------------
+
+enum LeadStatus {
+  BARU
+  DIHUBUNGI
+  KUALIFIKASI
+  SITE_VISIT
+  NEGOSIASI
+  BOOKING
+  CLOSING
+  LOST
+}
+
+enum LeadKualifikasi {
+  HOT
+  WARM
+  COLD
+}
+
+enum SumberLead {
+  WHATSAPP
+  TELEPON
+  WEBSITE
+  FACEBOOK_ADS
+  GOOGLE_ADS
+  PAMERAN
+  REFERRAL
+  INSTAGRAM
+  LAINNYA
+}
+
+model Lead {
+  id               String          @id @default(cuid())
+  nama             String
+  noHp             String
+  email            String?
+  sumber           SumberLead
+  minatClusterId   String?
+  minatTipe        String?
+  statusPipeline   LeadStatus      @default(BARU)
+  tagKualifikasi   LeadKualifikasi?
+  salesPicId       String?
+  isDuplikatDari   String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  salesPic         User?           @relation("SalesPic", fields: [salesPicId], references: [id])
+  minatCluster     Cluster?        @relation(fields: [minatClusterId], references: [id])
+  activities       Activity[]
+  bookings         Booking[]
+  documents        Document[]
+
+  @@map("leads")
+}
+
+model Activity {
+  id         String   @id @default(cuid())
+  leadId     String
+  jenis      String   // Telepon | WA | Meeting | SiteVisit | Catatan
+  ringkasan  String
+  createdBy  String
+  createdAt  DateTime @default(now())
+
+  lead       Lead     @relation(fields: [leadId], references: [id])
+  user       User     @relation(fields: [createdBy], references: [id])
+
+  @@map("activities")
+}
+
+// ---------------------------------------------------------------------------
+// Unit & Inventory
+// ---------------------------------------------------------------------------
+
+enum StatusUnit {
+  TERSEDIA
+  NEGOSIASI
+  BOOKED
+  TERJUAL
+  TIDAK_DIJUAL
+}
+
+model Cluster {
+  id           String   @id @default(cuid())
+  namaCluster  String
+  lokasi       String
+  createdAt    DateTime @default(now())
+
+  units        Unit[]
+  leads        Lead[]
+
+  @@map("clusters")
+}
+
+model Unit {
+  id            String     @id @default(cuid())
+  clusterId     String
+  blok          String
+  noKavling     String
+  tipe          String
+  luasTanah     Float
+  luasBangunan  Float
+  harga         BigInt
+  status        StatusUnit @default(TERSEDIA)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  cluster       Cluster    @relation(fields: [clusterId], references: [id])
+  bookings      Booking[]
+
+  @@unique([clusterId, blok, noKavling])
+  @@map("units")
+}
+
+// ---------------------------------------------------------------------------
+// Booking & Transaksi
+// ---------------------------------------------------------------------------
+
+enum SkemaPembayaran {
+  CASH
+  KPR
+  CASH_BERTAHAP
+}
+
+enum StatusBooking {
+  DRAFT
+  MENUNGGU_APPROVAL
+  DISETUJUI
+  DITOLAK
+  SELESAI
+}
+
+model Booking {
+  id               String          @id @default(cuid())
+  leadId           String
+  unitId           String
+  salesId          String
+  hargaDeal        BigInt
+  diskonPersen     Float           @default(0)
+  skemaPembayaran  SkemaPembayaran
+  status           StatusBooking   @default(DRAFT)
+  approvedBy       String?
+  approvedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  lead             Lead            @relation(fields: [leadId], references: [id])
+  unit             Unit            @relation(fields: [unitId], references: [id])
+  sales            User            @relation("SalesBooking", fields: [salesId], references: [id])
+  approver         User?           @relation("ApprovalBooking", fields: [approvedBy], references: [id])
+  checklists       BookingChecklist[]
+  documents        Document[]
+
+  @@map("bookings")
+}
+
+enum StatusChecklist {
+  BELUM_MULAI
+  DIPROSES
+  SELESAI
+  BERMASALAH
+}
+
+model BookingChecklist {
+  id         String          @id @default(cuid())
+  bookingId  String
+  tahap      Int             // 1–6 sesuai alur PRD 5.6
+  namaTahap  String
+  status     StatusChecklist @default(BELUM_MULAI)
+  catatan    String?
+  updatedAt  DateTime        @updatedAt
+
+  booking    Booking         @relation(fields: [bookingId], references: [id])
+
+  @@unique([bookingId, tahap])
+  @@map("booking_checklists")
+}
+
+// ---------------------------------------------------------------------------
+// Dokumen
+// ---------------------------------------------------------------------------
+
+model Document {
+  id             String   @id @default(cuid())
+  bookingId      String?
+  leadId         String?
+  jenisDokumen   String
+  fileUrl        String   // Path internal, bukan URL publik
+  uploadedBy     String
+  uploadedAt     DateTime @default(now())
+
+  booking        Booking? @relation(fields: [bookingId], references: [id])
+  lead           Lead?    @relation(fields: [leadId], references: [id])
+
+  @@map("documents")
+}
+
+// ---------------------------------------------------------------------------
+// Notifikasi
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  jenis     String
+  pesan     String
+  isRead    Boolean  @default(false)
+  linkRef   String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Audit Log — append-only, tidak boleh ada DELETE pada tabel ini
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  aksi       String   // CREATE | UPDATE | DELETE
+  entitas    String   // nama tabel/model
+  entitasId  String
+  before     Json?    // nilai sebelum perubahan
+  after      Json?    // nilai setelah perubahan
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([entitas, entitasId])
+  @@index([userId])
+  @@map("audit_logs")
+}

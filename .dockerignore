@@ -1,0 +1,41 @@
+# File ini diabaikan Docker saat membangun image.
+# Mencegah file yang tidak perlu masuk ke image produksi.
+
+# Dependencies
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Docker
+.dockerignore
+docker-compose.yml
+docker-compose.*.yml
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Next.js dev artifacts
+.next/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Upload (mount via volume, bukan di-bake ke image)
+uploads/
+
+# Docs
+*.md
+README*

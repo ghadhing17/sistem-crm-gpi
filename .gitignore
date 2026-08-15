@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js build output
+.next/
+out/
+build/
+
+# Environment files — JANGAN pernah commit file ini
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Docker volumes (data lokal development)
+postgres-data/
+
+# Upload files (dokumen customer — tidak masuk repo)
+uploads/
+
+# Prettier cache
+.prettiercache
+
+# Kiro / AI agent files (generated, tidak perlu di repo)
+AGENTS.md
+CLAUDE.md
+graphify-out/
+.kiro/
