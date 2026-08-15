@@ -16,6 +16,7 @@ import {
   apiUnauthorized, apiForbidden, apiServerError,
 } from "@/lib/utils/api";
 import { canCreateLead, canViewAllLeads } from "@/lib/auth/permissions";
+import { notifLeadDiassign } from "@/lib/notifications";
 import type { UserRole } from "@/types";
 import { ZodError } from "zod";
 
@@ -47,6 +48,14 @@ export async function GET(req: NextRequest) {
     if (query.sumber) where.sumber = query.sumber;
     if (query.minatClusterId) where.minatClusterId = query.minatClusterId;
 
+    // Filter rentang tanggal dibuat
+    if (query.dateFrom || query.dateTo) {
+      where.createdAt = {
+        ...(query.dateFrom && { gte: new Date(query.dateFrom + "T00:00:00.000Z") }),
+        ...(query.dateTo && { lte: new Date(query.dateTo + "T23:59:59.999Z") }),
+      };
+    }
+
     if (query.search) {
       where.OR = [
         { nama: { contains: query.search, mode: "insensitive" } },
@@ -72,6 +81,12 @@ export async function GET(req: NextRequest) {
           salesPic: { select: { id: true, nama: true } },
           minatCluster: { select: { id: true, namaCluster: true } },
           _count: { select: { activities: true } },
+          // Ambil aktivitas terakhir untuk kolom "Terakhir Dihubungi" (PRD Bab 7 poin 4)
+          activities: {
+            select: { createdAt: true, jenis: true },
+            orderBy: { createdAt: "desc" },
+            take: 1,
+          },
         },
         orderBy: { [query.sortBy]: query.sortOrder },
         skip: (query.page - 1) * query.limit,
@@ -202,6 +217,16 @@ export async function POST(req: NextRequest) {
         minatCluster: { select: { id: true, namaCluster: true } },
       },
     });
+
+    // Trigger notifikasi LEAD_DIASSIGN jika lead langsung di-assign ke sales (PRD 5.9)
+    // Fire-and-forget — tidak boleh gagalkan response jika notifikasi error
+    if (salesPicId && salesPicId !== user.id) {
+      notifLeadDiassign({
+        salesId:  salesPicId,
+        leadId:   lead.id,
+        leadNama: lead.nama,
+      }).catch(() => {});
+    }
 
     return apiSuccess({ lead }, 201);
   } catch (err) {

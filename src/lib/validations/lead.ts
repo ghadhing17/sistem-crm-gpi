@@ -158,6 +158,9 @@ export const listLeadsQuerySchema = z.object({
   sumber: z.enum(SumberLeadValues).optional(),
   salesPicId: z.string().cuid().optional(),
   minatClusterId: z.string().cuid().optional(),
+  /// Format: YYYY-MM-DD — filter lead berdasarkan tanggal dibuat
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD").optional(),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD").optional(),
   sortBy: z.enum(["createdAt", "updatedAt", "nama"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
