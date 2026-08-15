@@ -12,6 +12,7 @@ import { Suspense } from "react";
 import { useSession } from "next-auth/react";
 import DashboardSalesExec from "@/components/dashboard/DashboardSalesExec";
 import DashboardSalesManager from "@/components/dashboard/DashboardSalesManager";
+import DashboardAdmin from "@/components/dashboard/DashboardAdmin";
 import Link from "next/link";
 import type { UserRole } from "@/types";
 
@@ -113,30 +114,15 @@ function DashboardContent() {
   const userName = session.user.name ?? "Pengguna";
 
   switch (role) {
-    case "SALES_EXECUTIVE":
+    case "SALES":
       return <DashboardSalesExec userName={userName} />;
 
-    case "SALES_MANAGER":
+    case "MANAGER":
     case "SUPER_ADMIN":
       return <DashboardSalesManager userName={userName} />;
 
-    case "ADMIN_BACK_OFFICE":
-      return (
-        <DashboardNavGrid
-          items={NAV_ITEMS_ABO}
-          title={`Selamat datang, ${userName.split(" ")[0]}`}
-          subtitle="Admin / Back Office — kelola unit, booking, dan dokumen"
-        />
-      );
-
-    case "MANAGEMENT":
-      return (
-        <DashboardNavGrid
-          items={NAV_ITEMS_MANAGEMENT}
-          title={`Selamat datang, ${userName.split(" ")[0]}`}
-          subtitle="Management — akses laporan dan data bisnis keseluruhan"
-        />
-      );
+    case "ADMIN":
+      return <DashboardAdmin userName={userName} />;
 
     default:
       return (

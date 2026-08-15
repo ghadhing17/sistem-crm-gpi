@@ -1,11 +1,13 @@
 /**
  * Helper permission RBAC — CRM Graha Padma
  *
- * Semua keputusan akses di-centralize di sini, sesuai matriks PRD Bab 3.1.
- * Dipakai di API routes, Server Actions, dan middleware.
+ * Role baru:
+ *   SALES       = Sales (menangani lead & follow-up harian)
+ *   MANAGER     = Manager (approve, visibilitas lintas-tim, termasuk fungsi Management/Owner)
+ *   ADMIN       = Admin (kelola unit, dokumen, proses transaksi)
+ *   SUPER_ADMIN = Full access
  *
- * Prinsip: cek di backend SELALU — UI hanya menyembunyikan tombol,
- * bukan pengganti otorisasi sesungguhnya (PRD 10.3).
+ * Logika bisnis tidak berubah — hanya nama role yang diganti.
  */
 
 import type { UserRole } from "@/types";
@@ -16,10 +18,6 @@ import {
   ROLES_CAN_MANAGE_USERS,
   hasMinimumRole,
 } from "./roles";
-
-// ---------------------------------------------------------------------------
-// Tipe minimal — cukup field yang dibutuhkan untuk cek permission
-// ---------------------------------------------------------------------------
 
 interface SessionUser {
   id: string;
@@ -39,292 +37,171 @@ interface DocumentRecord {
 }
 
 // ---------------------------------------------------------------------------
-// LEAD permissions — PRD 3.1
+// LEAD permissions
 // ---------------------------------------------------------------------------
 
-/**
- * Bisa input lead baru:
- * Sales Exec ✅ | Sales Manager ✅ | Admin BO ✅ | Management ❌
- */
+/** Sales ✅ | Manager ✅ | Admin ✅ | Super Admin ✅ */
 export function canCreateLead(user: SessionUser): boolean {
-  return user.role !== "MANAGEMENT";
+  return true; // semua role bisa — Manager dulu juga bisa
 }
 
-/**
- * Bisa melihat detail lead:
- * - Sales Exec: hanya lead miliknya (salesPicId === user.id) atau yang belum di-assign
- * - Manager, Admin, Management, Super Admin: semua lead
- */
 export function canViewLead(user: SessionUser, lead: LeadRecord): boolean {
   if (ROLES_CAN_VIEW_ALL_LEADS.includes(user.role)) return true;
-  // Sales Exec: hanya miliknya atau unassigned
   return lead.salesPicId === user.id || lead.salesPicId === null;
 }
 
-/**
- * Bisa lihat SEMUA lead (bukan hanya milik sendiri):
- * Manager ✅ | Admin BO ✅ | Management ✅ | Super Admin ✅ | Sales Exec ❌
- */
+/** Manager ✅ | Admin ✅ | Super Admin ✅ | Sales ❌ */
 export function canViewAllLeads(user: SessionUser): boolean {
   return ROLES_CAN_VIEW_ALL_LEADS.includes(user.role);
 }
 
 /**
- * Bisa update status pipeline lead:
- * - Sales Exec: hanya lead miliknya
- * - Sales Manager: semua lead
- * - Admin BO ❌ | Management ❌ (mereka hanya bisa lihat)
+ * Sales: hanya lead miliknya | Manager: semua lead
+ * Admin ❌ (hanya lihat) | Super Admin ✅
  */
 export function canUpdateLeadPipeline(
   user: SessionUser,
   lead: LeadRecord
 ): boolean {
-  if (user.role === "SALES_MANAGER" || user.role === "SUPER_ADMIN") return true;
-  if (user.role === "SALES_EXECUTIVE") {
-    return lead.salesPicId === user.id;
-  }
+  if (user.role === "MANAGER" || user.role === "SUPER_ADMIN") return true;
+  if (user.role === "SALES") return lead.salesPicId === user.id;
   return false;
 }
 
-/**
- * Bisa reassign lead ke sales lain:
- * Manager ✅ | Admin BO ✅ | Super Admin ✅ | Sales Exec ❌ | Management ❌
- */
+/** Manager ✅ | Admin ✅ | Super Admin ✅ | Sales ❌ */
 export function canReassignLead(user: SessionUser): boolean {
   return (
-    user.role === "SALES_MANAGER" ||
-    user.role === "ADMIN_BACK_OFFICE" ||
+    user.role === "MANAGER" ||
+    user.role === "ADMIN" ||
     user.role === "SUPER_ADMIN"
   );
 }
 
 /**
- * Bisa edit data lead (nama, noHp, sumber, dll):
- * - Sales Exec: hanya lead miliknya
- * - Manager: semua lead
- * - Admin BO: semua lead
- * - Management ❌ (read-only)
+ * Sales: hanya lead miliknya | Manager: semua | Admin: semua | Super Admin: semua
  */
 export function canEditLead(user: SessionUser, lead: LeadRecord): boolean {
-  if (user.role === "MANAGEMENT") return false;
   if (user.role === "SUPER_ADMIN") return true;
-  if (
-    user.role === "SALES_MANAGER" ||
-    user.role === "ADMIN_BACK_OFFICE"
-  )
-    return true;
-  if (user.role === "SALES_EXECUTIVE") {
-    return lead.salesPicId === user.id;
-  }
+  if (user.role === "MANAGER" || user.role === "ADMIN") return true;
+  if (user.role === "SALES") return lead.salesPicId === user.id;
   return false;
 }
 
 // ---------------------------------------------------------------------------
-// BOOKING permissions — PRD 3.1
+// BOOKING permissions
 // ---------------------------------------------------------------------------
 
-/**
- * Bisa ajukan booking:
- * Sales Exec ✅ | Manager ✅ | Admin BO ✅ | Management ❌
- */
+/** Sales ✅ | Manager ✅ | Admin ✅ | Super Admin ✅ */
 export function canCreateBooking(user: SessionUser): boolean {
-  return user.role !== "MANAGEMENT";
+  return true;
 }
 
-/**
- * Bisa approve/tolak booking:
- * Manager ✅ | Management ✅ (opsional) | Super Admin ✅ | Sales Exec ❌ | Admin BO ❌
- */
+/** Manager ✅ | Super Admin ✅ | Sales ❌ | Admin ❌ */
 export function canApproveBooking(user: SessionUser): boolean {
   return ROLES_CAN_APPROVE.includes(user.role);
 }
 
-/**
- * Bisa lihat detail booking:
- * - Sales Exec: hanya booking miliknya
- * - Semua role lain: semua booking
- */
+/** Sales: hanya booking miliknya | Lainnya: semua */
 export function canViewBooking(
   user: SessionUser,
   booking: BookingRecord
 ): boolean {
-  if (user.role === "SALES_EXECUTIVE") {
-    return booking.salesId === user.id;
-  }
+  if (user.role === "SALES") return booking.salesId === user.id;
   return true;
 }
 
-/**
- * Bisa update status KPR/pembayaran:
- * Admin BO ✅ | Super Admin ✅ | Lainnya ❌
- */
+/** Admin ✅ | Super Admin ✅ | Lainnya ❌ */
 export function canUpdatePaymentStatus(user: SessionUser): boolean {
-  return (
-    user.role === "ADMIN_BACK_OFFICE" || user.role === "SUPER_ADMIN"
-  );
+  return user.role === "ADMIN" || user.role === "SUPER_ADMIN";
 }
 
 // ---------------------------------------------------------------------------
-// UNIT & INVENTORY permissions — PRD 3.1
+// UNIT & INVENTORY permissions
 // ---------------------------------------------------------------------------
 
-/**
- * Bisa kelola master data unit/cluster (CRUD):
- * Admin BO ✅ | Super Admin ✅ | Lainnya ❌
- */
+/** Admin ✅ | Super Admin ✅ | Lainnya ❌ */
 export function canManageInventory(user: SessionUser): boolean {
   return ROLES_CAN_MANAGE_INVENTORY.includes(user.role);
 }
 
-/**
- * Bisa request hold sementara unit (saat negosiasi):
- * Sales Exec ✅ | Manager ✅ | Lainnya ❌
- * (Admin BO kelola unit langsung, tidak perlu hold request)
- */
+/** Sales ✅ | Manager ✅ | Super Admin ✅ | Admin ❌ (kelola langsung) */
 export function canRequestUnitHold(user: SessionUser): boolean {
   return (
-    user.role === "SALES_EXECUTIVE" ||
-    user.role === "SALES_MANAGER" ||
+    user.role === "SALES" ||
+    user.role === "MANAGER" ||
     user.role === "SUPER_ADMIN"
   );
 }
 
 // ---------------------------------------------------------------------------
-// DOKUMEN permissions — PRD 3.1 & 5.7
+// DOKUMEN permissions
 // ---------------------------------------------------------------------------
 
-/**
- * Bisa upload dokumen:
- * Sales Exec ✅ | Manager ✅ | Admin BO ✅ | Management ❌
- */
+/** Sales ✅ | Manager ✅ | Admin ✅ | Super Admin ✅ */
 export function canUploadDocument(user: SessionUser): boolean {
-  return user.role !== "MANAGEMENT";
+  return true;
 }
 
-/**
- * Bisa hapus dokumen:
- * - Uploader asli (semua role): dokumen miliknya sendiri
- * - Admin BO dan Super Admin: semua dokumen
- */
+/** Admin & Super Admin: semua dokumen | Lainnya: hanya miliknya */
 export function canDeleteDocument(
   user: SessionUser,
   doc: DocumentRecord
 ): boolean {
-  if (
-    user.role === "ADMIN_BACK_OFFICE" ||
-    user.role === "SUPER_ADMIN"
-  )
-    return true;
+  if (user.role === "ADMIN" || user.role === "SUPER_ADMIN") return true;
   return doc.uploadedBy === user.id;
 }
 
 // ---------------------------------------------------------------------------
-// LAPORAN permissions — PRD 3.1
+// LAPORAN permissions
 // ---------------------------------------------------------------------------
 
-/**
- * Bisa export laporan:
- * Semua role ✅ (tapi scope berbeda — diterapkan di query level)
- */
-export function canExportReport(user: SessionUser): boolean {
-  return true; // semua bisa, scope dikontrol di query
+export function canExportReport(_user: SessionUser): boolean {
+  return true;
 }
 
-/**
- * Bisa lihat dashboard eksekutif (laporan lintas tim):
- * Manager ✅ | Admin BO ✅ | Management ✅ | Super Admin ✅ | Sales Exec ❌
- */
+/** Manager ✅ | Admin ✅ | Super Admin ✅ | Sales ❌ */
 export function canViewExecutiveDashboard(user: SessionUser): boolean {
-  return hasMinimumRole(user.role, "SALES_MANAGER");
+  return hasMinimumRole(user.role, "MANAGER");
 }
 
 // ---------------------------------------------------------------------------
-// USER MANAGEMENT permissions — PRD 3.1
+// USER MANAGEMENT permissions
 // ---------------------------------------------------------------------------
 
-/**
- * Bisa kelola user & role:
- * Super Admin ✅ saja — sesuai PRD
- */
+/** Super Admin ✅ saja */
 export function canManageUsers(user: SessionUser): boolean {
   return ROLES_CAN_MANAGE_USERS.includes(user.role);
 }
 
-/**
- * Bisa akses halaman Settings:
- * Admin BO ✅ | Manager ✅ | Super Admin ✅ | Management ❌ | Sales Exec ❌
- */
+/** Admin ✅ | Manager ✅ | Super Admin ✅ | Sales ❌ */
 export function canAccessSettings(user: SessionUser): boolean {
   return (
-    user.role === "ADMIN_BACK_OFFICE" ||
-    user.role === "SALES_MANAGER" ||
+    user.role === "ADMIN" ||
+    user.role === "MANAGER" ||
     user.role === "SUPER_ADMIN"
   );
 }
 
 // ---------------------------------------------------------------------------
-// Helper umum — untuk middleware dan API route guard
+// Route permissions — untuk middleware
 // ---------------------------------------------------------------------------
 
-/**
- * Mapping route prefix → role minimum yang dibutuhkan.
- * Dipakai di middleware.ts untuk proteksi route secara deklaratif.
- */
 export const ROUTE_PERMISSIONS: Record<string, UserRole[]> = {
-  "/dashboard": [
-    "SALES_EXECUTIVE",
-    "SALES_MANAGER",
-    "ADMIN_BACK_OFFICE",
-    "MANAGEMENT",
-    "SUPER_ADMIN",
-  ],
-  "/leads": [
-    "SALES_EXECUTIVE",
-    "SALES_MANAGER",
-    "ADMIN_BACK_OFFICE",
-    "MANAGEMENT",
-    "SUPER_ADMIN",
-  ],
-  "/units": [
-    "SALES_EXECUTIVE",
-    "SALES_MANAGER",
-    "ADMIN_BACK_OFFICE",
-    "MANAGEMENT",
-    "SUPER_ADMIN",
-  ],
-  "/bookings": [
-    "SALES_EXECUTIVE",
-    "SALES_MANAGER",
-    "ADMIN_BACK_OFFICE",
-    "MANAGEMENT",
-    "SUPER_ADMIN",
-  ],
-  "/reports": [
-    "SALES_EXECUTIVE",
-    "SALES_MANAGER",
-    "ADMIN_BACK_OFFICE",
-    "MANAGEMENT",
-    "SUPER_ADMIN",
-  ],
-  "/settings": [
-    "ADMIN_BACK_OFFICE",
-    "SALES_MANAGER",
-    "SUPER_ADMIN",
-  ],
+  "/dashboard": ["SALES", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+  "/leads":     ["SALES", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+  "/units":     ["SALES", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+  "/bookings":  ["SALES", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+  "/reports":   ["SALES", "MANAGER", "ADMIN", "SUPER_ADMIN"],
+  "/settings":  ["ADMIN", "MANAGER", "SUPER_ADMIN"],
   "/settings/users": ["SUPER_ADMIN"],
 };
 
-/**
- * Cek apakah user boleh mengakses route tertentu.
- * Dipakai di middleware sebelum render halaman.
- */
 export function canAccessRoute(user: SessionUser, pathname: string): boolean {
-  // Cari aturan paling spesifik (longest match)
   const matchingRoutes = Object.keys(ROUTE_PERMISSIONS)
     .filter((route) => pathname.startsWith(route))
     .sort((a, b) => b.length - a.length);
 
-  if (matchingRoutes.length === 0) return true; // route tidak diatur = bebas diakses
+  if (matchingRoutes.length === 0) return true;
 
   const requiredRoles = ROUTE_PERMISSIONS[matchingRoutes[0]];
   return requiredRoles.includes(user.role);

@@ -20,11 +20,10 @@ datasource db {
 // --- User & Auth ---
 
 enum UserRole {
-  SALES_EXECUTIVE
-  SALES_MANAGER
-  ADMIN_BACK_OFFICE
-  MANAGEMENT
-  SUPER_ADMIN
+  SALES       // Sales Executive — menangani lead & follow-up harian
+  MANAGER     // Sales Manager + Management/Owner — approve, visibilitas lintas-tim
+  ADMIN       // Admin/Back Office — kelola unit, dokumen, proses transaksi
+  SUPER_ADMIN // Full access + user management
 }
 
 // --- Lead ---
@@ -168,7 +167,7 @@ model User {
 }
 
 /// Tim/divisi sales — satu tim punya satu manager (PRD 5.10 Master Data)
-/// manager_id → User dengan role SALES_MANAGER atau SUPER_ADMIN
+/// manager_id → User dengan role MANAGER atau SUPER_ADMIN
 model Team {
   id        String  @id @default(cuid())
   namaTim   String

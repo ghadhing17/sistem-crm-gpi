@@ -67,7 +67,7 @@ export async function GET() {
       prisma.user.findMany({
         where: {
           statusAktif: true,
-          role: { in: ["SALES_EXECUTIVE", "SALES_MANAGER"] },
+          role: { in: ["SALES", "MANAGER"] },
         },
         select: {
           id:   true,

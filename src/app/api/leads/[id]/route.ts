@@ -145,7 +145,7 @@ export async function DELETE(
 
     // Hanya Manager dan Super Admin yang bisa hapus lead
     if (
-      user.role !== "SALES_MANAGER" &&
+      user.role !== "MANAGER" &&
       user.role !== "SUPER_ADMIN"
     ) {
       return apiForbidden("Hanya Sales Manager atau Super Admin yang bisa menghapus lead");

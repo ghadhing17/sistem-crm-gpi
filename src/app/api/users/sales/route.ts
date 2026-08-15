@@ -24,7 +24,7 @@ export async function GET() {
     const salesUsers = await prisma.user.findMany({
       where: {
         statusAktif: true,
-        role: { in: ["SALES_EXECUTIVE", "SALES_MANAGER"] },
+        role: { in: ["SALES", "MANAGER"] },
       },
       select: { id: true, nama: true, role: true },
       orderBy: { nama: "asc" },

@@ -8,10 +8,9 @@
 // ---------------------------------------------------------------------------
 
 export type UserRole =
-  | "SALES_EXECUTIVE"
-  | "SALES_MANAGER"
-  | "ADMIN_BACK_OFFICE"
-  | "MANAGEMENT"
+  | "SALES"
+  | "MANAGER"
+  | "ADMIN"
   | "SUPER_ADMIN";
 
 export interface User {

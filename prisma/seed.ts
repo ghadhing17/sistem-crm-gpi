@@ -62,12 +62,12 @@ async function main() {
       nama: 'Budi Santoso',
       email: 'manager@grahapadma.id',
       password: managerPassword,
-      role: UserRole.SALES_MANAGER,
+      role: UserRole.MANAGER,
       statusAktif: true,
       mustChangePassword: true,
     },
   })
-  console.log(`✓ Sales Manager : ${salesManager.email}  (id: ${salesManager.id})`)
+  console.log(`✓ Manager       : ${salesManager.email}  (id: ${salesManager.id})`)
 
   // -------------------------------------------------------------------------
   // 3. Team Sales dummy — manager diisi setelah user dibuat
@@ -90,7 +90,7 @@ async function main() {
   })
 
   // -------------------------------------------------------------------------
-  // 4. Sales Executive dummy
+  // 4. Sales dummy
   // -------------------------------------------------------------------------
   const salesPassword = await hash('Sales@GPI2026!', ARGON2_OPTIONS)
 
@@ -101,16 +101,16 @@ async function main() {
       nama: 'Rina Kusuma',
       email: 'sales1@grahapadma.id',
       password: salesPassword,
-      role: UserRole.SALES_EXECUTIVE,
+      role: UserRole.SALES,
       timId: team.id,
       statusAktif: true,
       mustChangePassword: true,
     },
   })
-  console.log(`✓ Sales Exec    : ${salesExec.email}  (id: ${salesExec.id})`)
+  console.log(`✓ Sales         : ${salesExec.email}  (id: ${salesExec.id})`)
 
   // -------------------------------------------------------------------------
-  // 5. Admin Back Office dummy
+  // 5. Admin dummy
   // -------------------------------------------------------------------------
   const adminPassword = await hash('Admin@GPI2026!', ARGON2_OPTIONS)
 
@@ -121,13 +121,13 @@ async function main() {
       nama: 'Dewi Pratiwi',
       email: 'admin@grahapadma.id',
       password: adminPassword,
-      role: UserRole.ADMIN_BACK_OFFICE,
+      role: UserRole.ADMIN,
       timId: team.id,
       statusAktif: true,
       mustChangePassword: true,
     },
   })
-  console.log(`✓ Admin BO      : ${adminBO.email}  (id: ${adminBO.id})`)
+  console.log(`✓ Admin         : ${adminBO.email}  (id: ${adminBO.id})`)
 
   // -------------------------------------------------------------------------
   // 6. Cluster Perumahan dummy
@@ -245,9 +245,9 @@ async function main() {
   console.log('  Role            | Email                        | Password')
   console.log('  ----------------+------------------------------+-------------------')
   console.log('  SUPER_ADMIN     | superadmin@grahapadma.id     | Admin@GPI2026!')
-  console.log('  SALES_MANAGER   | manager@grahapadma.id        | Manager@GPI2026!')
-  console.log('  SALES_EXECUTIVE | sales1@grahapadma.id         | Sales@GPI2026!')
-  console.log('  ADMIN_BO        | admin@grahapadma.id          | Admin@GPI2026!')
+  console.log('  MANAGER         | manager@grahapadma.id        | Manager@GPI2026!')
+  console.log('  SALES           | sales1@grahapadma.id         | Sales@GPI2026!')
+  console.log('  ADMIN           | admin@grahapadma.id          | Admin@GPI2026!')
   console.log('\n  ⚠  Semua akun (kecuali Super Admin) harus ganti password saat login pertama.')
 }
 

@@ -170,15 +170,15 @@ export async function POST(req: NextRequest) {
     if (data.salesPicId) {
       // Manager/Super Admin boleh assign langsung
       const canAssign =
-        user.role === "SALES_MANAGER" ||
+        user.role === "MANAGER" ||
         user.role === "SUPER_ADMIN" ||
-        user.role === "ADMIN_BACK_OFFICE";
+        user.role === "ADMIN";
       if (!canAssign) {
         return apiForbidden("Anda tidak bisa assign lead ke sales lain");
       }
       salesPicId = data.salesPicId;
-    } else if (user.role === "SALES_EXECUTIVE") {
-      // Sales Executive otomatis assign ke dirinya sendiri
+    } else if (user.role === "SALES") {
+      // Sales otomatis assign ke dirinya sendiri
       salesPicId = user.id;
     }
     // Manager yang input tidak otomatis assign ke diri sendiri — masuk "unassigned"

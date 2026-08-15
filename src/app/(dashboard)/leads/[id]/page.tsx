@@ -17,7 +17,9 @@ import { format } from "date-fns";
 import { id as localeId } from "date-fns/locale";
 import ActivityTimeline, { type Activity } from "@/components/leads/detail/ActivityTimeline";
 import LogAktivitasModal from "@/components/leads/detail/LogAktivitasModal";
-import { canEditLead, canUpdateLeadPipeline } from "@/lib/auth/permissions";
+import BuatBookingModal from "@/components/bookings/BuatBookingModal";
+import DocumentUploader from "@/components/documents/DocumentUploader";
+import { canEditLead, canUpdateLeadPipeline, canCreateBooking } from "@/lib/auth/permissions";
 import type { UserRole } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -36,6 +38,8 @@ interface LeadDetail {
   alasanLost: string | null;
   catatanNegosiasi: string | null;
   isDuplikatDari: string | null;
+  holdUnitId: string | null;
+  holdUnit?: { id: string; blok: string; noKavling: string; tipe: string; harga: string; cluster: { namaCluster: string } } | null;
   createdAt: string;
   updatedAt: string;
   salesPic: { id: string; nama: string; role: string } | null;
@@ -90,12 +94,14 @@ function LeadDetailContent() {
   const [loadingLead, setLoadingLead]   = useState(true);
   const [loadingAct, setLoadingAct]     = useState(true);
   const [showModal, setShowModal]       = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
   const [statusChanging, setStatusChanging] = useState(false);
   const [error, setError]               = useState<string | null>(null);
 
   // Hak akses
-  const canEdit   = lead && role ? canEditLead({ id: userId, role }, { salesPicId: lead.salesPic?.id ?? null }) : false;
-  const canStatus = lead && role ? canUpdateLeadPipeline({ id: userId, role }, { salesPicId: lead.salesPic?.id ?? null }) : false;
+  const canEdit    = lead && role ? canEditLead({ id: userId, role }, { salesPicId: lead.salesPic?.id ?? null }) : false;
+  const canStatus  = lead && role ? canUpdateLeadPipeline({ id: userId, role }, { salesPicId: lead.salesPic?.id ?? null }) : false;
+  const canBooking = role ? canCreateBooking({ id: userId, role }) : false;
 
   // ---------------------------------------------------------------------------
   // Fetch lead detail
@@ -249,17 +255,30 @@ function LeadDetailContent() {
           </div>
 
           {/* Tombol aksi cepat */}
-          {canEdit && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#009182] hover:bg-[#007a6e] text-white text-sm font-medium transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-              </svg>
-              Log Aktivitas
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {canBooking && lead && !["LOST","CLOSING","BOOKING"].includes(lead.statusPipeline) && (
+              <button
+                onClick={() => setShowBookingModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg border border-[#009182] text-[#009182] hover:bg-teal-50 text-sm font-medium transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Buat Booking
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#009182] hover:bg-[#007a6e] text-white text-sm font-medium transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Log Aktivitas
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Grid info kontak */}
@@ -446,6 +465,13 @@ function LeadDetailContent() {
       </div>
 
       {/* ------------------------------------------------------------------ */}
+      {/* BAGIAN DOKUMEN                                                       */}
+      {/* ------------------------------------------------------------------ */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-5">
+        <DocumentUploader leadId={lead.id} title="Dokumen Lead" />
+      </div>
+
+      {/* ------------------------------------------------------------------ */}
       {/* Modal Log Aktivitas                                                  */}
       {/* ------------------------------------------------------------------ */}
       {showModal && (
@@ -455,6 +481,27 @@ function LeadDetailContent() {
           noHp={lead.noHp}
           onSimpan={handleAktivitasBaru}
           onTutup={() => setShowModal(false)}
+        />
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Modal Buat Booking (PRD 5.5 & 6.2 langkah 5)                        */}
+      {/* ------------------------------------------------------------------ */}
+      {showBookingModal && lead && (
+        <BuatBookingModal
+          leadId={lead.id}
+          leadNama={lead.nama}
+          holdUnit={lead.holdUnit ?? undefined}
+          onBerhasil={(booking) => {
+            setShowBookingModal(false);
+            if (booking.butuhApproval) {
+              setError(null);
+              // Tampilkan info bahwa booking dikirim ke manager
+            }
+            // Refresh lead untuk update _count.bookings
+            fetchLead();
+          }}
+          onTutup={() => setShowBookingModal(false)}
         />
       )}
     </div>

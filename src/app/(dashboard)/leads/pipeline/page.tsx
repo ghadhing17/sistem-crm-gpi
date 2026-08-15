@@ -317,9 +317,9 @@ function PipelineContent() {
                 currentUserId={userId}
                 // Manager/Super Admin bisa drag semua; Sales Exec hanya miliknya
                 canDragAll={
-                  role === "SALES_MANAGER" ||
+                  role === "MANAGER" ||
                   role === "SUPER_ADMIN" ||
-                  role === "ADMIN_BACK_OFFICE"
+                  role === "ADMIN"
                 }
               />
             ))}
